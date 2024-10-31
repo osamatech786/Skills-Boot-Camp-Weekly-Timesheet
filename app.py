@@ -167,7 +167,7 @@ elif st.session_state.page == 2:
                             run = cell.paragraphs[0].add_run()
                             run.add_picture(signature_image_path, width=Inches(0.5))  # Adjust width as needed
                         else:
-                            cell.text = ""  # Clear any placeholder text if unchecked
+                            cell.text = "Absent"  # Clear any placeholder text if unchecked
 
             # Generate a unique file name based on the learner's name
             safe_learner_name = re.sub(r'\W+', '_', st.session_state.learner_name)
