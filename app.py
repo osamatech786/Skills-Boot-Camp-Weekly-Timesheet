@@ -80,8 +80,8 @@ if st.session_state.page == 1:
 # Second Screen: Learner Declaration and Attendance Table with Checkboxes
 elif st.session_state.page == 2:    
     st.subheader("Attendance Register Declaration (Monday - Friday)")
-    learner_name = st.text_input("Enter your full name")    
-    st.markdown(f"I, {learner_name} confirm I have attended the scheduled sessions from **16/09/2024** to **20/09/2024** "
+    st.session_state.learner_name = st.text_input("Enter your full name")    
+    st.markdown(f"I, {st.session_state.learner_name} confirm I have attended the scheduled sessions from **16/09/2024** to **20/09/2024** "
                 "as outlined in the weekly timetable. I understand that accurate attendance is important for the completion of this programme.")
     
     # Custom header without checkboxes
@@ -130,12 +130,12 @@ elif st.session_state.page == 2:
     st.write(f"Date: **{declaration_date}**")    
 
     if st.button("Save Declaration and Export Document"):
-        if is_signature_drawn(st.session_state.learner_signature):
+        if is_signature_drawn(st.session_state.learner_signature) and st.session_state.learner_name:
             filled_doc = Document("Skills Boot Camp Week 1 Timesheet.docx")
             
             for paragraph in filled_doc.paragraphs:
                 if 'learner_name' in paragraph.text:
-                    paragraph.text = paragraph.text.replace('learner_name', learner_name)
+                    paragraph.text = paragraph.text.replace('learner_name', st.session_state.learner_name)
                 if 'date' in paragraph.text:
                     paragraph.text = paragraph.text.replace('date', declaration_date)
                 # Replace the placeholder text with the signature image
@@ -170,15 +170,15 @@ elif st.session_state.page == 2:
                             cell.text = ""  # Clear any placeholder text if unchecked
 
             # Generate a unique file name based on the learner's name
-            safe_learner_name = re.sub(r'\W+', '_', learner_name)
+            safe_learner_name = re.sub(r'\W+', '_', st.session_state.learner_name)
             filled_doc_path = f"Filled_Skills_Boot_Camp_Timesheet_{safe_learner_name}.docx"
             filled_doc.save(filled_doc_path)
 
             st.success("Document filled and saved successfully.")
             with open(filled_doc_path, "rb") as file:
-                st.download_button(f"Download Filled Timesheet for {learner_name}", file, filled_doc_path)
+                st.download_button(f"Download Filled Timesheet for {st.session_state.learner_name}", file, filled_doc_path)
         else:
-            st.warning("Please draw the signature!")
+            st.warning("Please enter your nae & draw the signature!")
     if st.button("Back"):
         st.session_state.page = 1
         st.experimental_rerun()
