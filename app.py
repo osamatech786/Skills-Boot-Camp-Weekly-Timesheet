@@ -183,7 +183,7 @@ elif st.session_state.page == 2:
         elif len(st.session_state.learner_name.strip()) < 2:
             st.warning("Name must be at least 2 characters long")
 
-    st.markdown(f"I, {st.session_state.learner_name} confirm I have attended the scheduled sessions from **16/09/2024** to **20/09/2024** "
+    st.markdown(f"I, {st.session_state.learner_name} confirm I have attended the scheduled sessions from **{st.session_state.start_date}** to **{st.session_state.end_date}** "
                 "as outlined in the weekly timetable. I understand that accurate attendance is important for the completion of this programme.")
     
     # Custom header without checkboxes
