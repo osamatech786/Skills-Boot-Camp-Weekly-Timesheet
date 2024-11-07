@@ -1,5 +1,5 @@
 import streamlit as st
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from docx import Document
 from docx.shared import Inches
 import numpy as np
@@ -45,7 +45,11 @@ if 'checkboxes' not in st.session_state:
     st.session_state.checkboxes = []  # Store checkbox states for each attendance row
 if 'attendance_checkboxes' not in st.session_state:
     st.session_state.attendance_checkboxes = []  # List of tuples [(am_present, am_absent, pm_present, pm_absent), ...]
-
+if 'start_date' not in st.session_state:
+    st.session_state.start_date = None
+if 'end_date' not in st.session_state:
+    st.session_state.end_date = None
+    
 # Function to load DOCX data, skipping header row in the second table
 def load_docx_data():
     doc = Document(fr'resources/Skills Boot Camp Week {get_secret("week")} Group 1 Timesheet.docx')
@@ -88,6 +92,28 @@ def is_signature_drawn(signature):
         return False
     return True
 
+def get_weekday_dates(start_date, end_date):
+    """Generate start date, Tuesday, Wednesday, Thursday, and end date"""
+    dates = {
+        'start_date': start_date.strftime("%d/%m/%Y"),
+        'tu_date': None,
+        'we_date': None,
+        'th_date': None,
+        'end_date': end_date.strftime("%d/%m/%Y"),
+    }
+
+    current_date = start_date
+    while current_date <= end_date:
+        if current_date.weekday() == 1:  # Tuesday
+            dates['tu_date'] = current_date.strftime("%d/%m/%Y")
+        elif current_date.weekday() == 2:  # Wednesday
+            dates['we_date'] = current_date.strftime("%d/%m/%Y")
+        elif current_date.weekday() == 3:  # Thursday
+            dates['th_date'] = current_date.strftime("%d/%m/%Y")
+        current_date += timedelta(days=1)
+
+    return dates
+
 # Load data from DOCX
 weekly_timesheet_info, df1, df2 = load_docx_data()
 
@@ -95,6 +121,45 @@ weekly_timesheet_info, df1, df2 = load_docx_data()
 if st.session_state.page == 1:
     st.header(f'Skills Boot Camp Week {get_secret("week")} Timesheet')
     
+    # Date input fields
+    if isinstance(st.session_state.get("start_date"), str):
+        st.session_state.start_date = datetime.strptime(st.session_state.get("start_date"), "%d/%m/%Y").date()
+    # Date of Birth
+    st.session_state.start_date = st.date_input(
+        label="Start Date",  # Label for the field
+        value=st.session_state.get("start_date"),  # Correctly access start_date from session state
+        min_value=date(1900, 1, 1),  # Minimum selectable date
+        max_value=date.today(),  # Maximum selectable date
+        help="Choose a date",  # Tooltip text
+        format='DD/MM/YYYY'
+    )
+    if st.session_state.start_date != None:
+        st.session_state.start_date = st.session_state.start_date.strftime("%d/%m/%Y")
+
+    if isinstance(st.session_state.get("end_date"), str):
+        st.session_state.end_date = datetime.strptime(st.session_state.get("end_date"), "%d/%m/%Y").date()
+    # Date of Birth
+    st.session_state.end_date = st.date_input(
+        label="End Date",  # Label for the field
+        value=st.session_state.get("end_date"),  # Correctly access end_date from session state
+        min_value=date(1900, 1, 1),  # Minimum selectable date
+        max_value=date.today(),  # Maximum selectable date
+        help="Choose a date",  # Tooltip text
+        format='DD/MM/YYYY'
+    )
+    if st.session_state.end_date != None:
+        st.session_state.end_date = st.session_state.end_date.strftime("%d/%m/%Y")
+    
+    # Check if both dates are provided
+    if st.session_state.start_date and st.session_state.end_date:
+        # Replace dates in weekly_timesheet_info
+        weekly_timesheet_info = weekly_timesheet_info.replace("start_date", st.session_state.start_date)
+        weekly_timesheet_info = weekly_timesheet_info.replace("end_date", st.session_state.end_date)
+    else:
+        st.warning("Please enter both start and end dates.")
+        st.stop()  # Stop execution until both dates are entered
+
+
     st.text(weekly_timesheet_info)
 
     st.markdown(df1.to_html(index=False, header=False), unsafe_allow_html=True)
@@ -133,10 +198,25 @@ elif st.session_state.page == 2:
 
     # Track checkbox states in session state to retain selections
     checkboxes = []
+    
+    weekday_dates = get_weekday_dates(datetime.strptime(st.session_state.get("start_date"), "%d/%m/%Y").date(), datetime.strptime(st.session_state.get("end_date"), "%d/%m/%Y").date())
     for idx, row in df2.iterrows():
         row_cols = st.columns([1, 1, 1, 1, 1])
         row_cols[0].write(row["Day"])
-        row_cols[1].write(row["Date"])
+        # row_cols[1].write(row["Date"])
+
+        # Use the weekday_dates dictionary to get the date value
+        # Assuming you want to map 'Date' in df2 to the keys from weekday_dates
+        if row["Date"] == "start_date":
+            row_cols[1].write(weekday_dates['start_date'])
+        elif row["Date"] == "tu_date":
+            row_cols[1].write(weekday_dates['tu_date'])
+        elif row["Date"] == "we_date":
+            row_cols[1].write(weekday_dates['we_date'])
+        elif row["Date"] == "th_date":
+            row_cols[1].write(weekday_dates['th_date'])
+        elif row["Date"] == "end_date":
+            row_cols[1].write(weekday_dates['end_date'])
         
         # Checkboxes for AM
         am_present = row_cols[2].checkbox("Present (AM)", key=f"am_present_{idx}", value=st.session_state.attendance_checkboxes[idx][0])
@@ -193,8 +273,12 @@ elif st.session_state.page == 2:
                 filled_doc = Document(fr'resources/Skills Boot Camp Week {get_secret("week")} Group 1 Timesheet.docx')
                 
                 for paragraph in filled_doc.paragraphs:
+                    if 'start_date' in paragraph.text:
+                        paragraph.text = paragraph.text.replace('start_date', str(st.session_state.start_date))
+                    if 'end_date' in paragraph.text:
+                        paragraph.text = paragraph.text.replace('end_date', str(st.session_state.end_date)                        )
                     if 'learner_name' in paragraph.text:
-                        paragraph.text = paragraph.text.replace('learner_name', st.session_state.learner_name)
+                        paragraph.text = paragraph.text.replace('learner_name', str(st.session_state.learner_name))
                     if 'date' in paragraph.text:
                         paragraph.text = paragraph.text.replace('date', declaration_date)
                     # Replace the placeholder text with the signature image
@@ -214,6 +298,19 @@ elif st.session_state.page == 2:
                 for table_idx, table in enumerate(filled_doc.tables):
                     if table_idx == 1:  # Ensure we're modifying the attendance table
                         for row_idx, row in enumerate(table.rows[1:]):  # Skip the header row
+
+                            # Replace keys with date values
+                            day_text = row.cells[1].text  # Assuming the day is in the first cell
+                            if day_text == "start_date":
+                                row.cells[1].text = weekday_dates['start_date']
+                            elif day_text == "tu_date":
+                                row.cells[1].text = weekday_dates['tu_date']
+                            elif day_text == "we_date":
+                                row.cells[1].text = weekday_dates['we_date']
+                            elif day_text == "th_date":
+                                row.cells[1].text = weekday_dates['th_date']
+                            elif day_text == "end_date":
+                                row.cells[1].text = weekday_dates['end_date']
 
                             # Get the checkboxes state for the current row
                             am_present_checked = st.session_state.attendance_checkboxes[row_idx][0]  # AM Present
