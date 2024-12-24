@@ -410,7 +410,7 @@ elif st.session_state.page == 2:
                 
                 # Generate a unique file name based on the learner's name
                 safe_learner_name = re.sub(r'\W+', '_', st.session_state.learner_name)
-                filled_doc_path = f"Timesheet_w{get_secret("week")}_{safe_learner_name}.docx"
+                filled_doc_path = f'Timesheet_w{get_secret("week")}_{safe_learner_name}.docx'
                 # Add error handling for document saving
                 try:
                     filled_doc.save(filled_doc_path)
@@ -422,7 +422,7 @@ elif st.session_state.page == 2:
                 
                 with st.spinner('Submitting your timesheet...'):
                     # Upload to share point
-                    parent_folder_path = "CC0044AEB CATALYST/0. SUBMISSIONS FOLDER/04. SURREY SKILLS BOOTCAMP - ENROLMENT FOLDER/Cohort 2 WC 25-11-2024, NOV 2024"
+                    parent_folder_path = get_secret("PARENT_FOLDER_PATH")
                     status_code=upload_to_sharepoint(ACCESS_TOKEN, DRIVE_ID, parent_folder_path, filled_doc_path)
                     if status_code == 200:
                         st.warning(f"Timesheet already exist with the same name.")
