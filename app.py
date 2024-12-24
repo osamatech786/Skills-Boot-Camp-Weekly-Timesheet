@@ -4,12 +4,16 @@ from docx import Document
 from docx.shared import Inches
 import numpy as np
 import pandas as pd
-import re
 from PIL import Image as PILImage
 from io import BytesIO
 from streamlit_drawable_canvas import st_canvas
+import requests
+import re
 import os
 from dotenv import load_dotenv
+import msal
+from openpyxl import load_workbook
+import urllib.parse
 
 # Set page configuration with a favicon
 st.set_page_config(
@@ -18,6 +22,36 @@ st.set_page_config(
     layout="centered"  # "centered" or "wide"
 )
 
+# Load environment variables from .env file
+load_dotenv()
+
+# Fetch credentials from environment variables
+CLIENT_ID = os.getenv("CLIENT_ID")
+CLIENT_SECRET = os.getenv("CLIENT_SECRET")
+TENANT_ID = os.getenv("TENANT_ID")
+DRIVE_ID = os.getenv("DRIVE_ID")
+
+# Authenticate and acquire an access token
+def acquire_access_token():
+    app = msal.ConfidentialClientApplication(
+        client_id=CLIENT_ID,
+        client_credential=CLIENT_SECRET,
+        authority=f"https://login.microsoftonline.com/{TENANT_ID}",
+    )
+    result = app.acquire_token_for_client(scopes=["https://graph.microsoft.com/.default"])
+    if "access_token" in result:
+        return result["access_token"]
+    else:
+        print("Failed to acquire token")
+        print(result.get("error"))
+        print(result.get("error_description"))
+        exit()
+
+ACCESS_TOKEN = acquire_access_token() 
+
+# ========================
+# Functions
+# ========================
 # add render support along with st.secret
 def get_secret(key):
     try:
@@ -34,6 +68,26 @@ def get_secret(key):
         # If still not found, return None or handle as needed
         return None
     
+def upload_to_sharepoint(access_token, drive_id, parent_folder_path, attendance_sheet_file_path):
+    headers = {"Authorization": f"Bearer {access_token}"}
+
+    # URL encode the parent folder path
+    encoded_parent_folder_path = urllib.parse.quote(parent_folder_path)
+
+    # Fetch folders in the parent path
+    parent_url = f"https://graph.microsoft.com/v1.0/drives/{drive_id}/root:/{encoded_parent_folder_path}:/children"
+    response = requests.get(parent_url, headers=headers)
+
+    if response.status_code == 200:
+        # Upload the attendance sheet using the multipart method
+        upload_url = f"https://graph.microsoft.com/v1.0/drives/{drive_id}/root:/{encoded_parent_folder_path}/{attendance_sheet_file_path}:/content"
+
+        with open(attendance_sheet_file_path, "rb") as f:
+            upload_response = requests.put(upload_url, headers=headers, data=f)
+        return upload_response.status_code
+    else:
+        return f"Error fetching parent folder: {response.status_code} \nError details: {response.text}"
+
 # Initialize session state for screen navigation
 if 'page' not in st.session_state:
     st.session_state.page = 1
@@ -257,7 +311,8 @@ elif st.session_state.page == 2:
     declaration_date = date.today().strftime("%d-%m-%Y")
     st.write(f"Date: **{declaration_date}**")    
 
-    if st.button("Save Declaration and Export Document"):
+    if st.button("Submit"):
+        
         valid_attendance = True
         for idx, (am_present, am_absent, pm_present, pm_absent) in enumerate(st.session_state.attendance_checkboxes):
             print(f"Day {idx + 1}: AM Present: {am_present}, AM Absent: {am_absent}, PM Present: {pm_present}, PM Absent: {pm_absent}")
@@ -355,16 +410,28 @@ elif st.session_state.page == 2:
                 
                 # Generate a unique file name based on the learner's name
                 safe_learner_name = re.sub(r'\W+', '_', st.session_state.learner_name)
-                filled_doc_path = f"Filled_Skills_Boot_Camp_Timesheet_{safe_learner_name}.docx"
+                filled_doc_path = f"Timesheet_w{get_secret("week")}_{safe_learner_name}.docx"
                 # Add error handling for document saving
                 try:
                     filled_doc.save(filled_doc_path)
-                    st.success("Document filled and saved successfully.")
                 except Exception as e:
                     st.error(f"Error saving document: {e}")
 
-                with open(filled_doc_path, "rb") as file:
-                    st.download_button(f"Download Filled Timesheet for {st.session_state.learner_name}", file, filled_doc_path)
+                # with open(filled_doc_path, "rb") as file:
+                #     st.download_button(f"Download Filled Timesheet for {st.session_state.learner_name}", file, filled_doc_path)
+                
+                with st.spinner('Submitting your timesheet...'):
+                    # Upload to share point
+                    parent_folder_path = "CC0044AEB CATALYST/0. SUBMISSIONS FOLDER/04. SURREY SKILLS BOOTCAMP - ENROLMENT FOLDER/Cohort 2 WC 25-11-2024, NOV 2024"
+                    status_code=upload_to_sharepoint(ACCESS_TOKEN, DRIVE_ID, parent_folder_path, filled_doc_path)
+                    if status_code == 200:
+                        st.warning(f"Timesheet already exist with the same name.")
+                    elif status_code == 201:
+                        st.success(f"Timesheet submitted successfully!")
+                    elif status_code == 400:
+                        st.error(f"Error submitting timesheet!")
+                    else:
+                        st.error(status_code)
             else:
                 st.warning("Please enter your name & draw the signature!")
         else:
